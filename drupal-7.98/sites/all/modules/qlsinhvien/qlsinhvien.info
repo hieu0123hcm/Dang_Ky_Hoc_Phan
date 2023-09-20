@@ -1,0 +1,4 @@
+name = 'Quản Lý Sinh Viên'
+description = "Dùng để thêm xóa sửa thông tin Sinh Viên"
+core = 7.x
+; configure = admin/custom/qlsinhvien

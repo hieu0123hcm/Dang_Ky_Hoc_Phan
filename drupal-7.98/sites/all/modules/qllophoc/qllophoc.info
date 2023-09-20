@@ -1,0 +1,5 @@
+name = 'Quản Lý Lớp Học'
+description = "Dùng để thêm xóa sửa thông tin Lớp học"
+core = 7.x
+
+permissions[] = use qllophoc

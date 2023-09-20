@@ -1,0 +1,343 @@
+<?php
+/**
+ * Implements hook_menu().
+ */
+function qlsinhvien_menu()
+{
+    $items['admin/qlsinhvien'] = array(
+        'title' => 'Quản lý sinh viên',
+        'description' => 'Danh sách sinh viên',
+        'page callback' => 'qlsinhvien_sort_with_pager_table',
+        'access arguments' => array('qlsinhvien_access'),
+        'weight' => -14,
+        'menu_name' => 'navigation',
+    );
+
+    $items['admin/qlsinhvien/add'] = array(
+        'title' => 'Thêm sinh viên',
+        'description' => 'Thêm sinh viên',
+        'page callback' => 'qlsinhvien_insert_block_view',
+        'access arguments' => array('qlsinhvien_access'),
+        'weight' => -14,
+    );
+
+    $items['admin/qlsinhvien/%/delete'] = array(
+        'title' => 'Xóa dữ liệu sinh viên',
+        'description' => 'Xóa dữ liệu sinh viên',
+        'page callback' => 'qlsinhvien_delete',
+        'page argument' => array(3),
+        'access arguments' => array('qlsinhvien_access'),
+        'weight' => -14,
+    );
+
+    $items['admin/qlsinhvien/%/edit'] = array(
+        'title' => 'Chỉnh sửa dữ liệu sinh viên',
+        'description' => 'Chỉnh sửa dữ liệu sinh viên',
+        'page callback' => 'qlsinhvien_edit_block_view',
+        'page argument' => array(3),
+        'access arguments' => array('qlsinhvien_access'),
+        'weight' => -14,
+    );
+
+    return $items;
+
+}
+
+/**
+ * Implements Insert hook_block_view().
+ */
+function qlsinhvien_insert_block_view($block_name = '')
+{
+    if (drupal_is_front_page()) {
+        return NULL;
+    }
+
+    $form = drupal_get_form('qlsinhvien_form');
+    $block = array(
+        'subject' => t('Subject'),
+        'content' => $form,
+    );
+
+    return $block;
+}
+
+/**
+ * Custom function to display data from Database
+ */
+function qlsinhvien_sort_with_pager_table()
+{
+    $header = array(
+        array('data' => t('ID'), 'field' => 'id', 'sort' => 'asc'),
+        array('data' => t('Mã sinh viên'), 'field' => 'masv'),
+        array('data' => t('Họ tên'), 'field' => 'hoten'),
+        array('data' => t('Ngày sinh'), 'field' => 'ngaysinh'),
+        array('data' => t('Action')),
+    );
+
+    $query = db_select('demo_sinhvien', 'c');
+    $query->fields('c', array('id', 'masv', 'hoten', 'ngaysinh'));
+
+    $table_sort = $query->extend('TableSort')
+        ->orderByHeader($header);
+    $pager = $table_sort->extend('PagerDefault')
+        ->limit(10);
+    $result = $pager->execute();
+
+    $rows = array();
+    foreach ($result as $res) {
+        $rows[] = array($res->id, $res->masv, $res->hoten, $res->ngaysinh, '<a href="/drupal-7.98/admin/qlsinhvien/' . $res->id . '/edit"> Chỉnh sửa </a> | <a href="/drupal-7.98/admin/qlsinhvien/' . $res->id . '/delete"> Xóa </a>');
+    }
+
+    if (!empty($rows)) {
+        $output = theme('table', array('header' => $header, 'rows' => $rows, 'attributes' => array('id' => 'sort-table')));
+        $output .= theme('pager');
+    } else {
+        @$output .= t("Không tìm thấy dữ liệu.");
+    }
+    $output .= '
+        <br>
+        <div class="add-or-remove-shortcuts">
+            <a href="/drupal-7.98/admin/qlsinhvien/add"><span class="icon"></span>Thêm dữ liệu sinh viên mới</a>
+        </div>';
+
+    return $output;
+}
+
+/**
+ * Implements insert data hook_form().
+ */
+function qlsinhvien_form($form, &$form_state)
+{
+    $form['qlsinhvien_masv'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Mã sinh viên'),
+        '#description' => t('Mã sinh viên (Không thể trùng lặp)'),
+        '#size' => 40,
+        '#maxlength' => 120,
+        '#required' => TRUE,
+    );
+
+    $form['qlsinhvien_hoten'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Họ tên sinh viên'),
+        '#description' => t('Họ tên sinh viên'),
+        '#size' => 40,
+        '#maxlength' => 120,
+        '#required' => TRUE,
+    );
+
+    $form['qlsinhvien_ngaysinh'] = array(
+        '#type' => 'date',
+        '#title' => t('Ngày tháng năm sinh của sinh viên'),
+        '#description' => t('Ngày tháng năm sinh của sinh viên'),
+        '#required' => TRUE,
+    );
+
+    $form['submit'] = array(
+        '#type' => 'submit',
+        '#value' => t('Thêm'),
+    );
+
+    $form['#submit'][] = 'qlsinhvien_submit_handler';
+
+    return $form;
+
+}
+
+
+
+/**
+ * Handling event when click submit button
+ */
+function qlsinhvien_submit_handler($form, &$form_state)
+{
+    $error = 1;
+    if (
+        !isset($form_state['values']['qlsinhvien_masv']) ||
+        !isset($form_state['values']['qlsinhvien_hoten']) ||
+        !isset($form_state['values']['qlsinhvien_ngaysinh'])
+    ) {
+        $error = 0;
+        drupal_set_message(t('Không thể thêm sinh viên!'));
+    }
+
+    if ($error) {
+        $qlsinhvien_masv = $form_state['values']['qlsinhvien_masv'];
+        $qlsinhvien_hoten = $form_state['values']['qlsinhvien_hoten'];
+        $year = $form_state['values']['qlsinhvien_ngaysinh']['year'];
+        $month = $form_state['values']['qlsinhvien_ngaysinh']['month'];
+        $day = $form_state['values']['qlsinhvien_ngaysinh']['day'];
+        $qlsinhvien_ngaysinh = $year . '-' . $month . '-' . $day;
+
+        try {
+            $insert = db_insert('demo_sinhvien')
+                ->fields(
+                    array(
+                        'masv' => $qlsinhvien_masv,
+                        'hoten' => $qlsinhvien_hoten,
+                        'ngaysinh' => $qlsinhvien_ngaysinh,
+                    )
+                )
+                ->execute();
+        } catch (PDOException $e) {
+            if ($e->getCode() == '23000') {
+                //The code of duplicate MaSV
+                drupal_set_message(t('Mã sinh viên đã trùng với dữ liệu trong kho dữ liệu'), 'error');
+            }
+            return;
+        }
+
+
+        drupal_set_message(t('Đã thêm 1 sinh viên!'));
+    }
+}
+
+/**
+ * Delete function
+ */
+function qlsinhvien_delete()
+{
+    $id = arg(2);
+
+    try {
+        $num_updated = db_delete('demo_sinhvien')
+            ->condition('id', $id, '=')
+            ->execute();
+        if ($num_updated) {
+            drupal_set_message(t('Dữ liệu có ID ' . $id . ' đã được xóa'));
+        }
+    } catch (PDOException $e) {
+        if ($e->getCode() == '23000') {
+            drupal_set_message(t('Vui lòng xóa toàn bộ dữ liệu trong đăng ký học phần của sinh viên này trước khi xóa sinh viên'), 'error');
+        }
+    }
+
+
+
+    drupal_goto("admin/qlsinhvien/");
+}
+
+/**
+ * Implements edit hook_block_view().
+ */
+function qlsinhvien_edit_block_view($block_name = '')
+{
+    /* Front page validation */
+    if (drupal_is_front_page()) {
+        return NULL;
+    }
+
+    $form = drupal_get_form('qlsinhvien_edit_form');
+    $block = array(
+        'subject' => t('Subject'),
+        'content' => $form,
+    );
+    return $block;
+}
+
+function qlsinhvien_edit_form($form, &$form_state)
+{
+
+    $id = arg(2);
+    $result = db_query('SELECT * FROM {demo_sinhvien} WHERE id = :tid', array(':tid' => $id));
+
+    $record = $result->fetchObject();
+
+    $birthdate = explode("-", $record->ngaysinh);
+    $form['qlsinhvien_masv'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Mã sinh viên'),
+        '#value' => t($record->masv),
+        '#description' => t('Mã sinh viên'),
+        '#size' => 40,
+        '#maxlength' => 120,
+        '#required' => TRUE,
+    );
+
+    $form['qlsinhvien_hoten'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Họ và tên sinh viên'),
+        '#value' => t($record->hoten),
+        '#description' => t('Họ tên sinh viên'),
+        '#size' => 40,
+        '#maxlength' => 120,
+        '#required' => TRUE,
+    );
+    $form['id'] = array(
+        '#type' => 'hidden',
+        '#value' => t($id),
+    );
+
+    $form['qlsinhvien_ngaysinh'] = array(
+        '#type' => 'date',
+        '#value' => array('year' => $birthdate[0], 'month' => (int) $birthdate[1], 'day' => (int) $birthdate[2]),
+        '#title' => t('Ngày tháng năm sinh của sinh viên'),
+        '#description' => t('Ngày tháng năm sinh của sinh viên'),
+        '#required' => TRUE,
+    );
+    $form['submit'] = array(
+        '#type' => 'submit',
+        '#value' => t('Lưu'),
+    );
+    $form['#submit'][] = 'qlsinhvien_edit_submit_handler';
+
+    return $form;
+}
+
+function qlsinhvien_edit_submit_handler($form, &$form_state)
+{
+    $error = 1;
+    if (
+        !isset($form_state['values']['qlsinhvien_masv']) ||
+        !isset($form_state['values']['qlsinhvien_hoten']) ||
+        !isset($form_state['values']['qlsinhvien_ngaysinh'])
+    ) {
+        $error = 0;
+        drupal_set_message(t('Không thể chỉnh sửa dữ liệu sinh viên!'));
+    }
+
+    if ($error) {
+        $id = $form_state['values']['id'];
+        $qlsinhvien_masv = $form_state['input']['qlsinhvien_masv'];
+        $qlsinhvien_hoten = $form_state['input']['qlsinhvien_hoten'];
+        $year = $form_state['input']['qlsinhvien_ngaysinh']['year'];
+        $month = $form_state['input']['qlsinhvien_ngaysinh']['month'];
+        $day = $form_state['input']['qlsinhvien_ngaysinh']['day'];
+        $qlsinhvien_ngaysinh = $year . '-' . $month . '-' . $day;
+
+        try {
+            $data = array(
+                'masv' => $qlsinhvien_masv,
+                'hoten' => $qlsinhvien_hoten,
+                'ngaysinh' => $qlsinhvien_ngaysinh,
+            );
+
+            $num_updated = db_update('demo_sinhvien')
+                ->fields($data)
+                ->condition('id', $id, '=')
+                ->execute();
+        } catch (PDOException $e) {
+            if ($e->getCode() == '23000') {
+                //The code of duplicate MaSV
+                drupal_set_message(t('Mã sinh viên đã trùng với dữ liệu trong kho dữ liệu'), 'error');
+            }
+            return;
+        }
+
+
+        drupal_set_message(t('Đã lưu thành công!'));
+    }
+}
+
+/**
+ * Implement hook_permission
+ */
+function qlsinhvien_permission()
+{
+    return array(
+        'qlsinhvien_access' => array(
+            'title' => t('QuanLy Access'),
+            'description' => t('Allows QuanLy role to access MyModule pages.'),
+        ),
+    );
+}

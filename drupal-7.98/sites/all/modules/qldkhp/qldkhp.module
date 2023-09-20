@@ -1,0 +1,195 @@
+<?php
+/**
+ * Implements hook_menu().
+ */
+function qldkhp_menu()
+{
+    $items['admin/qldkhp'] = array(
+        'title' => 'Quản lý đăng ký học phần',
+        'description' => 'Danh sách học phần',
+        'page callback' => 'qldkhp_sort_with_pager_table',
+        'access arguments' => array('qldkhp_access'),
+        'menu_name' => 'navigation',
+        'weight' => -14,
+    );
+
+    $items['admin/qldkhp/search/%/%'] = array(
+        'title' => 'Tìm kiếm đăng ký học phần',
+        'description' => 'Danh sách học phần theo từ khóa',
+        'page callback' => 'qldkhp_search_result',
+        'access arguments' => array('qldkhp_access'),
+        'page argument' => array(4),
+        'menu_name' => 'navigation',
+        'weight' => -14,
+    );
+
+    $items['admin/qldkhp/%/delete'] = array(
+        'title' => 'Xóa dữ liệu đăng ký học phần',
+        'description' => 'Xóa dữ liệu đăng ký học phần',
+        'page callback' => 'qldkhp_delete',
+        'access arguments' => array('qldkhp_access'),
+        'page argument' => array(4),
+        'weight' => -14,
+    );
+
+    return $items;
+}
+
+
+/**
+ * Custom function to display data from Database
+ */
+function qldkhp_sort_with_pager_table()
+{
+    $header = array(
+        array('data' => t('ID'), 'field' => 'id', 'sort' => 'asc'),
+        array('data' => t('Mã Sinh Viên'), 'field' => 'masv'),
+        array('data' => t('Mã lớp học'), 'field' => 'malophoc'),
+        array('data' => t('Ngày đăng ký'), 'field' => 'ngaydk'),
+
+        array('data' => t('Thao tác')),
+    );
+
+    $query = db_select('demo_dkhp', 'c');
+    $query->fields('c', array('id', 'masv', 'malophoc', 'ngaydk'));
+
+    $table_sort = $query->extend('TableSort')
+        ->orderByHeader($header);
+    $pager = $table_sort->extend('PagerDefault')
+        ->limit(10);
+    $result = $pager->execute();
+
+    $rows = array();
+    foreach ($result as $res) {
+        $rows[] = array($res->id, $res->masv, $res->malophoc, $res->ngaydk, '<a href="/drupal-7.98/admin/qldkhp/' . $res->id . '/delete"> Xóa </a>');
+    }
+
+
+    if (!empty($rows)) {
+        $output = theme('table', array('header' => $header, 'rows' => $rows, 'attributes' => array('id' => 'sort-table')));
+        $output .= theme('pager');
+    } else {
+        @$output .= t("Không tìm thấy học phần.");
+    }
+
+    $form = drupal_get_form('qldkhp_search_form');
+
+    return drupal_render($form) . $output;
+}
+
+
+
+function qldkhp_search_form($form, &$form_state)
+{
+    $form['qllophoc_tukhoatimkiem'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Tìm kiếm'),
+        '#size' => 40,
+        '#maxlength' => 120,
+    );
+
+    $form['qllophoc_muctimkiem'] = array(
+        '#type' => 'radios',
+        '#title' => t('Mục tìm kiếm'),
+        '#options' => array('masv' => 'Mã sinh viên', 'malophoc' => 'Mã lớp học'),
+        '#default_value' => 'masv',
+
+    );
+
+
+
+    $form['submit'] = array(
+        '#type' => 'submit',
+        '#value' => t('Tìm'),
+    );
+
+    $form['#submit'][] = 'qldkhp_search_submit_handler';
+    return $form;
+}
+
+function qldkhp_search_submit_handler($form, &$form_state)
+{
+    $search_term = $form_state['values']['qllophoc_tukhoatimkiem'];
+    $type = $form_state['values']['qllophoc_muctimkiem'];
+    drupal_goto("admin/qldkhp/search/$type/$search_term");
+}
+
+
+
+/**
+ * Custom function to display data from Database
+ */
+function qldkhp_search_result()
+{
+    $header = array(
+        array('data' => t('ID'), 'field' => 'id', 'sort' => 'asc'),
+        array('data' => t('Mã Sinh Viên'), 'field' => 'masv'),
+        array('data' => t('Mã lớp học'), 'field' => 'malophoc'),
+        array('data' => t('Ngày đăng ký'), 'field' => 'ngaydk'),
+
+        array('data' => t('Thao tác')),
+    );
+
+
+    // $query = db_select('demo_dkhp', 'c');
+
+    if (arg(3) === 'masv') {
+        $query = db_query('SELECT n.id, n.masv, n.malophoc, n.ngaydk
+        FROM demo_dkhp n WHERE n.masv = :masv', array(':masv' => arg(4)));
+    } else if (arg(3) === 'malophoc') {
+        $query = db_query('SELECT n.id, n.masv, n.malophoc, n.ngaydk
+        FROM demo_dkhp n WHERE n.malophoc = :malophoc', array(':malophoc' => arg(4)));
+    }
+
+
+
+    $rows = array();
+    foreach ($query as $res) {
+        $rows[] = array($res->id, $res->masv, $res->malophoc, $res->ngaydk, '<a href="/drupal-7.98/admin/qldkhp/' . $res->id . '/delete"> Xóa </a>');
+    }
+
+
+    if (!empty($rows)) {
+        $output = theme('table', array('header' => $header, 'rows' => $rows, 'attributes' => array('id' => 'sort-table')));
+        $output .= theme('pager');
+    } else {
+        @$output .= t("Không tìm thấy học phần.");
+    }
+
+    $form = drupal_get_form('qldkhp_search_form');
+
+    return drupal_render($form) . $output;
+}
+
+/**
+ * Delete function
+ */
+function qldkhp_delete()
+{
+
+    $id = arg(2);
+    $num_updated = db_delete('demo_dkhp')
+        ->condition('id', $id, '=')
+        ->execute();
+    if ($num_updated) {
+        drupal_set_message(t('Dữ liệu có ID ' . $id . ' đã được xóa'));
+    }
+
+
+    drupal_goto("admin/qldkhp/");
+}
+
+
+
+/**
+ * Implement hook_permission
+ */
+function qldkhp_permission()
+{
+    return array(
+        'qldkhp_access' => array(
+            'title' => t('QuanLy Access'),
+            'description' => t('Allows QuanLy role to access MyModule pages.'),
+        ),
+    );
+}

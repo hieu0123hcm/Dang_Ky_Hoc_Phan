@@ -1,0 +1,387 @@
+<?php
+/**
+ * Implements hook_menu().
+ */
+function qllophoc_menu()
+{
+    $items['admin/qllophoc'] = array(
+        'title' => 'Quản lý lớp học',
+        'description' => 'Danh sách lớp học',
+        'page callback' => 'qllophoc_sort_with_pager_table',
+        'access arguments' => array('qllophoc_access'),
+        'menu_name' => 'navigation',
+        'weight' => -14,
+    );
+
+    $items['admin/qllophoc/add'] = array(
+        'title' => 'Thêm lớp học',
+        'description' => 'Thêm lớp học',
+        'page callback' => 'qllophoc_insert_block_view',
+        'access arguments' => array('qllophoc_access'),
+        'weight' => -14,
+    );
+
+    $items['admin/qllophoc/%/delete'] = array(
+        'title' => 'Xóa dữ liệu lớp học',
+        'description' => 'Xóa dữ liệu lớp học',
+        'page callback' => 'qllophoc_delete',
+        'access arguments' => array('qllophoc_access'),
+        'page argument' => array(3),
+        'weight' => -14,
+    );
+
+    $items['admin/qllophoc/%/edit'] = array(
+        'title' => 'Chỉnh sửa dữ liệu lớp học',
+        'description' => 'Chỉnh sửa dữ liệu lớp học',
+        'page callback' => 'qllophoc_edit_block_view',
+        'access arguments' => array('qllophoc_access'),
+        'page argument' => array(3),
+        'weight' => -14,
+    );
+
+    return $items;
+
+}
+
+/**
+ * Implements Insert hook_block_view().
+ */
+function qllophoc_insert_block_view($block_name = '')
+{
+    if (drupal_is_front_page()) {
+        return NULL;
+    }
+
+    $form = drupal_get_form('qllophoc_form');
+    $block = array(
+        'subject' => t('Subject'),
+        'content' => $form,
+    );
+
+
+    return $block;
+}
+
+/**
+ * Custom function to display data from Database
+ */
+function qllophoc_sort_with_pager_table()
+{
+    $header = array(
+        array('data' => t('ID'), 'field' => 'id', 'sort' => 'asc'),
+        array('data' => t('Mã lớp học'), 'field' => 'malophoc'),
+        array('data' => t('Tiết học'), 'field' => 'tiethoc'),
+        array('data' => t('Thứ'), 'field' => 'thu'),
+        array('data' => t('Sĩ số lớp'), 'field' => 'sisolop'),
+        array('data' => t('Thao tác')),
+    );
+
+    $query = db_select('demo_lophoc', 'c');
+    $query->fields('c', array('id', 'malophoc', 'tiethoc', 'thu', 'sisolop'));
+
+    $table_sort = $query->extend('TableSort')
+        ->orderByHeader($header);
+    $pager = $table_sort->extend('PagerDefault')
+        ->limit(10);
+    $result = $pager->execute();
+
+    $rows = array();
+    foreach ($result as $res) {
+        $rows[] = array($res->id, $res->malophoc, $res->tiethoc, $res->thu, $res->sisolop, '<a href="/drupal-7.98/admin/qllophoc/' . $res->id . '/edit"> Chỉnh sửa </a> | <a href="/drupal-7.98/admin/qllophoc/' . $res->id . '/delete"> Xóa </a>');
+    }
+
+    if (!empty($rows)) {
+        $output = theme('table', array('header' => $header, 'rows' => $rows, 'attributes' => array('id' => 'sort-table')));
+        $output .= theme('pager');
+    } else {
+        @$output .= t("Không tìm thấy lớp học nào.");
+    }
+    $output .= '
+        <br>
+        <div class="add-or-remove-shortcuts">
+            <a href="/drupal-7.98/admin/qllophoc/add"><span class="icon"></span>Thêm dữ liệu lớp học mới</a>
+        </div>';
+
+    return $output;
+}
+
+/**
+ * Implements insert data hook_form().
+ */
+function qllophoc_form($form, &$form_state)
+{
+    $form['qllophoc_malophoc'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Mã lớp học'),
+        '#description' => t('Mã lớp học (Không thể trùng lặp)'),
+        '#size' => 40,
+        '#maxlength' => 120,
+        '#required' => TRUE,
+    );
+
+    $form['qllophoc_tiethoc'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Tiết học'),
+        '#description' => t('Tiết học của lớp học'),
+        '#size' => 40,
+        '#maxlength' => 120,
+        '#required' => TRUE,
+        '#element_validate' => array('element_validate_number'),
+    );
+
+    $form['qllophoc_thu'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Thứ'),
+        '#description' => t('Tiết học diễn ra vào thứ (2-8)'),
+        '#size' => 40,
+        '#maxlength' => 120,
+        '#required' => TRUE,
+        '#element_validate' => array('element_validate_number', 'qllophoc_validate'),
+    );
+
+    $form['qllophoc_sisolop'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Sỉ số lớp'),
+        '#description' => t('Số học sinh tối đa của lớp học'),
+        '#size' => 40,
+        '#maxlength' => 120,
+        '#element_validate' => array('element_validate_number'),
+        '#required' => TRUE,
+    );
+
+    $form['submit'] = array(
+        '#type' => 'submit',
+        '#value' => t('Thêm'),
+    );
+
+    $form['#submit'][] = 'qllophoc_submit_handler';
+
+    return $form;
+
+}
+
+function qllophoc_validate($element, $form_state)
+{
+    if (
+        $form_state['values']['qllophoc_thu'] > 8 ||
+        $form_state['values']['qllophoc_thu'] < 2 ||
+        $form_state['input']['qllophoc_thu'] > 8 ||
+        $form_state['input']['qllophoc_thu'] < 2
+    ) {
+        form_error($element, t('Thứ không hợp lệ !'));
+    }
+}
+
+/**
+ * Handling event when click submit button
+ */
+function qllophoc_submit_handler($form, &$form_state)
+{
+
+    $error = 1;
+    if (
+        !isset($form_state['values']['qllophoc_malophoc']) ||
+        !isset($form_state['values']['qllophoc_tiethoc']) ||
+        !isset($form_state['values']['qllophoc_thu']) ||
+        !isset($form_state['values']['qllophoc_sisolop'])
+    ) {
+        $error = 0;
+        drupal_set_message(t('Không thể thêm lớp học!'));
+    }
+
+    if ($error) {
+        $qllophoc_malophoc = $form_state['values']['qllophoc_malophoc'];
+        $qllophoc_tiethoc = $form_state['values']['qllophoc_tiethoc'];
+        $qllophoc_thu = $form_state['values']['qllophoc_thu'];
+        $qllophoc_sisolop = $form_state['values']['qllophoc_sisolop'];
+
+
+        try {
+            $insert = db_insert('demo_lophoc')
+                ->fields(
+                    array(
+                        'malophoc' => $qllophoc_malophoc,
+                        'tiethoc' => $qllophoc_tiethoc,
+                        'thu' => $qllophoc_thu,
+                        'sisolop' => $qllophoc_sisolop,
+                    )
+                )
+                ->execute();
+        } catch (PDOException $e) {
+            if ($e->getCode() == '23000') {
+                //The code of duplicate Malophoc
+                drupal_set_message(t('Mã lớp học đã trùng với dữ liệu trong kho dữ liệu'), 'error');
+            }
+            return;
+        }
+
+
+        drupal_set_message(t('Đã thêm 1 lớp học mới!'));
+    }
+}
+
+/**
+ * Delete function
+ */
+function qllophoc_delete()
+{
+
+    $id = arg(2);
+
+    try {
+        $num_updated = db_delete('demo_lophoc')
+            ->condition('id', $id, '=')
+            ->execute();
+        if ($num_updated) {
+            drupal_set_message(t('Dữ liệu có ID ' . $id . ' đã được xóa'));
+        }
+
+    } catch (PDOException $e) {
+        if ($e->getCode() == '23000') {
+            drupal_set_message(t('Vui lòng xóa toàn bộ dữ liệu trong đăng ký học phần của lớp học này trước khi xóa lớp học'), 'error');
+        }
+    }
+    drupal_goto("admin/qllophoc/");
+}
+
+/**
+ * Implements edit hook_block_view().
+ */
+function qllophoc_edit_block_view($block_name = '')
+{
+    /* Front page validation */
+    if (drupal_is_front_page()) {
+        return NULL;
+    }
+
+    $form = drupal_get_form('qllophoc_edit_form');
+    $block = array(
+        'subject' => t('Subject'),
+        'content' => $form,
+    );
+    return $block;
+}
+
+function qllophoc_edit_form($form, &$form_state)
+{
+
+    $id = arg(2);
+    $result = db_query('SELECT * FROM {demo_lophoc} WHERE id = :tid', array(':tid' => $id));
+
+    $record = $result->fetchObject();
+
+    $form['id'] = array(
+        '#type' => 'hidden',
+        '#value' => t($id),
+    );
+
+    $form['qllophoc_malophoc'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Mã lớp học'),
+        '#value' => t($record->malophoc),
+        '#description' => t('Mã lớp học'),
+        '#size' => 40,
+        '#maxlength' => 120,
+        '#required' => TRUE,
+    );
+
+    $form['qllophoc_tiethoc'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Tiết học'),
+        '#value' => t($record->tiethoc),
+        '#description' => t('Tiết học'),
+        '#size' => 40,
+        '#maxlength' => 120,
+        '#required' => TRUE,
+        '#element_validate' => array('element_validate_number'),
+    );
+
+    $form['qllophoc_thu'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Thứ'),
+        '#value' => t($record->thu),
+        '#description' => t('Thứ'),
+        '#size' => 40,
+        '#maxlength' => 120,
+        '#required' => TRUE,
+        '#element_validate' => array('element_validate_number', 'qllophoc_validate'),
+    );
+
+    $form['qllophoc_sisolop'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Sĩ số lớp'),
+        '#value' => t($record->sisolop),
+        '#description' => t('Sĩ số lớp'),
+        '#size' => 40,
+        '#maxlength' => 120,
+        '#required' => TRUE,
+        '#element_validate' => array('element_validate_number'),
+    );
+
+    $form['submit'] = array(
+        '#type' => 'submit',
+        '#value' => t('Lưu'),
+    );
+    $form['#submit'][] = 'qllophoc_edit_submit_handler';
+
+    return $form;
+}
+
+function qllophoc_edit_submit_handler($form, &$form_state)
+{
+    $error = 1;
+    if (
+        !isset($form_state['values']['qllophoc_malophoc']) ||
+        !isset($form_state['values']['qllophoc_tiethoc']) ||
+        !isset($form_state['values']['qllophoc_thu']) ||
+        !isset($form_state['values']['qllophoc_sisolop'])
+    ) {
+        $error = 0;
+        drupal_set_message(t('Không thể chỉnh sửa dữ liệu lớp học!'));
+    }
+
+    if ($error) {
+        $id = $form_state['values']['id'];
+        $qllophoc_malophoc = $form_state['input']['qllophoc_malophoc'];
+        $qllophoc_tiethoc = $form_state['input']['qllophoc_tiethoc'];
+        $qllophoc_thu = $form_state['input']['qllophoc_thu'];
+        $qllophoc_sisolop = $form_state['input']['qllophoc_sisolop'];
+
+
+        try {
+            $data = array(
+                'malophoc' => $qllophoc_malophoc,
+                'tiethoc' => $qllophoc_tiethoc,
+                'thu' => $qllophoc_thu,
+                'sisolop' => $qllophoc_sisolop,
+            );
+
+            $num_updated = db_update('demo_lophoc')
+                ->fields($data)
+                ->condition('id', $id, '=')
+                ->execute();
+        } catch (PDOException $e) {
+            if ($e->getCode() == '23000') {
+                //The code of duplicate Malophoc
+                drupal_set_message(t('Mã lớp học đã trùng với dữ liệu trong kho dữ liệu'), 'error');
+            }
+            return;
+        }
+
+
+        drupal_set_message(t('Đã lưu thành công!'));
+    }
+}
+
+/**
+ * Implement hook_permission
+ */
+function qllophoc_permission()
+{
+    return array(
+        'qllophoc_access' => array(
+            'title' => t('QuanLy Access'),
+            'description' => t('Allows QuanLy role to access MyModule pages.'),
+        ),
+    );
+}

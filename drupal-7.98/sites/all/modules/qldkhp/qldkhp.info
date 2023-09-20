@@ -1,0 +1,3 @@
+name = 'Quản Lý Đăng ký học phần'
+description = "Dùng để quản lý học phần"
+core = 7.x
